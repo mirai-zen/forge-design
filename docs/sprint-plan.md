@@ -1,4 +1,4 @@
-# IDP 开发计划（Day 1 → Week 4）
+# IDP 开发计划 v2.0（platform 优先策略）
 
 > **目标**：4 周内完成 Phase 0 简历 Demo，具备完整演示能力后立即投简历。
 
@@ -140,7 +140,48 @@ kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80 &
 
 ---
 
-## Week 1：基础设施 + user-service 端到端
+## Phase 0 功能规格
+
+> 详细方案见 [`docs/services/platform-api.md`](services/platform-api.md)
+
+### 功能概览
+
+| 模块 | 功能 | 方案文档 |
+|------|------|---------|
+| 项目管理 | 创建项目（模板 + 自动仓库）、项目列表、项目详情 | [platform-api](services/platform-api.md) |
+| 服务管理 | 创建服务（模板 + 自动 PR）、服务详情 | [platform-api](services/platform-api.md) |
+| 部署管理 | 新建部署（GH Actions）、实时状态查询（ArgoCD） | [platform-api](services/platform-api.md) |
+
+### 技术方案总览
+
+| 环节 | 方案 | 关键技术 |
+|------|------|---------|
+| 创建项目 | GitHub API 创建仓库 + 渲染项目模板 | `go-github` + `text/template` |
+| 创建服务 | 渲染模板 → GitHub API 提交 PR | `text/template` + CreateFile/PullRequest |
+| 模板存储 | `deploy/templates/` 目录 | `.tpl` 文件 + `template.yaml` |
+| 新建部署 | GitHub Actions `workflow_dispatch` | POST actions dispatches |
+| 部署执行 | GH Actions → push GHCR → ArgoCD 同步 | Docker + Helm + ArgoCD |
+| 状态查询 | 实时调 ArgoCD/K8s API（不存库） | GET ArgoCD application status |
+| 环境隔离 | K8s Namespace：forge-dev / forge-staging / forge-prod | 每环境独立 values.yaml |
+
+### 不在 Phase 0 范围
+
+| 功能 | 说明 |
+|------|------|
+| 部署回滚 | Phase 1 |
+| 自定义环境 | 固定三环境 |
+| 用户认证 | Day 8 补位 |
+| 多服务模板 | 先做一个 go-zero 模板 |
+
+---
+
+## Week 1：platform 核心 + gateway + GitOps 流水线
+
+---
+
+## Week 1：platform 核心 + gateway + GitOps 流水线
+
+> **策略**：跳过 user-service，直接从 platform-service（IDP 核心）起步。Auth 先用硬编码，核心链路跑通后再补。
 
 #### 协议发布流水线
 
@@ -162,7 +203,7 @@ kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80 &
 
 ---
 
-### Day 0：仓库初始化 + CI/CD 配置
+### Day 0：仓库初始化 + CI/CD 配置 ✅ 已完成
 
 #### 创建 forge-proto 协议仓库
 
@@ -170,27 +211,21 @@ kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80 &
 mkdir forge-proto && cd forge-proto
 
 # 按服务独立 go.mod（与 forge 对齐）
-mkdir -p user/gen
-cd user/v1 && go mod init github.com/mirai-zen/forge-proto/user && cd ../..
-
-mkdir -p gateway/gen
-cd gateway/v1 && go mod init github.com/mirai-zen/forge-proto/gateway && cd ../..
-
-mkdir -p platform/gen
-cd platform/v1 && go mod init github.com/mirai-zen/forge-proto/platform && cd ../..
+mkdir -p user/gen && cd user/v1 && go mod init github.com/mirai-zen/forge-proto/user && cd ../..
+mkdir -p gateway/gen && cd gateway/v1 && go mod init github.com/mirai-zen/forge-proto/gateway && cd ../..
+mkdir -p platform/gen && cd platform/v1 && go mod init github.com/mirai-zen/forge-proto/platform && cd ../..
 
 # Go workspace
 go work init ./user ./gateway ./platform
 
 # buf.gen.yaml（buf 代码生成配置）
-# （详见 forge-architecture.md 1.4 节）
 
 git init && git add . && git commit -m "init: proto repo"
 git remote add origin git@github.com:mirai-zen/forge-proto.git
 git push -u origin main
 ```
 
-#### 创建 forge 后端 Monorepo
+#### 创建 forge 后端 Monorepo ✅
 
 ```bash
 mkdir forge && cd forge
@@ -198,17 +233,13 @@ mkdir forge && cd forge
 # 三个服务各自独立 go.mod
 mkdir -p user/cmd user/internal/{handler,logic,svc,config} user/configs
 cd user && go mod init github.com/mirai-zen/forge/user && cd ..
-
 mkdir -p gateway/cmd gateway/internal/{handler,logic,svc,config} gateway/configs
 cd gateway && go mod init github.com/mirai-zen/forge/gateway && cd ..
-
 mkdir -p platform/cmd platform/internal/{handler,logic,svc,config} platform/configs
 cd platform && go mod init github.com/mirai-zen/forge/platform && cd ..
 
 # 部署配置
 mkdir -p deploy/charts/{user,gateway,platform}/templates deploy/argocd
-
-# Go workspace（本地开发）
 go work init ./user ./gateway ./platform
 
 git init && git add . && git commit -m "init: forge monorepo"
@@ -221,283 +252,394 @@ git push -u origin main
 ```
 github.com/mirai-zen/
 ├── forge-proto          ✅ 公开仓库，Phase 0
-├── forge         ✅ 私有仓库，Phase 0
+├── forge                ✅ 私有仓库，Phase 0
 ├── forge-web            ✅ 私有仓库，Phase 0
 └── （其余仓库按需创建）
 ```
 
-### Day 1：user.proto + user-service 端到端
+---
+
+### Day 1：platform.proto + platform-service CRUD（IDP 核心）
 
 **protocol 层：**
 ```bash
 cd forge-proto
 
-# 编写 user/user.proto（注册/登录）
-option go_package = "github.com/mirai-zen/forge-proto/user/gen;userv1";
+# 编写 platform/platform.proto
+# - ServiceManagement (CRUD)
+# - DeployManagement (触发部署、查询状态)
+# - TemplateManagement (模板 CRUD)
 
 buf generate
-git tag user/v0.1.0 && git push --tags && cd ../..
+git tag platform/v0.1.0 && git push --tags && cd ../..
 ```
 
-**实现层（forge/user/）：**
-```bash
-cd forge/user
+**platform.proto 接口定义：**
+```protobuf
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/mirai-zen/forge-proto/platform/gen;platformv1";
 
-# 引入 proto 依赖（只拉 user proto，不拉全量）
-go get github.com/mirai-zen/forge-proto/user@0.1.0
+service Platform {
+  // 服务管理
+  rpc CreateService(CreateServiceReq) returns (CreateServiceResp);
+  rpc ListServices(ListServicesReq) returns (ListServicesResp);
+  rpc GetService(GetServiceReq) returns (GetServiceResp);
+  rpc DeleteService(DeleteServiceReq) returns (DeleteServiceResp);
 
-# 基础文件
-touch cmd/main.go
-touch internal/handler/user.go
-touch internal/logic/user.go
-touch internal/user.go
-touch internal/config/config.example.yaml
-```
-
-**user-service 目录结构：**
-
-message RegisterResponse {
-    string user_id = 1;
-    string message = 2;
+  // 部署管理
+  rpc DeployService(DeployServiceReq) returns (DeployServiceResp);
+  rpc GetDeployStatus(GetDeployStatusReq) returns (GetDeployStatusResp);
+  rpc ListDeployments(ListDeploymentsReq) returns (ListDeploymentsResp);
 }
 
-message LoginRequest {
-    string username = 1;
-    string password = 2;
+message CreateServiceReq {
+  string name = 1;
+  string description = 2;
+  string repository_url = 3;
+  string branch = 4;
 }
 
-message LoginResponse {
-    string token = 1;           // JWT
-    int64 expires_at = 2;
+message CreateServiceResp {
+  uint64 id = 1;
+  string message = 2;
 }
+
+message ListServicesReq {
+  string status = 1;   // active / inactive / all
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message ListServicesResp {
+  repeated ServiceInfo services = 1;
+  int32 total = 2;
+}
+
+message ServiceInfo {
+  uint64 id = 1;
+  string name = 2;
+  string description = 3;
+  string status = 4;
+  string created_at = 5;
+}
+
+// ... 其余 message 定义
 ```
 
+**实现层（forge/platform/）：**
 ```bash
-buf generate
-git tag v0.1.0 && git push --tags
-```
-
-### Day 1-2：forge user-service 端到端
-
-**实现层（forge/user/）：**
-```bash
-cd forge/user
+cd forge/platform
 
 # 引入 proto 依赖
-go get github.com/mirai-zen/forge-proto@v0.1.0
+go get github.com/mirai-zen/forge-proto/platform@v0.1.0
+
+# 搭建 go-zero 骨架
+# cmd/main.go         → 启动入口
+# internal/handler/   → HTTP → gRPC 转换
+# internal/logic/     → 业务编排
+# internal/svc/       → 依赖注入（MySQL / etcd）
+# internal/config/    → 配置结构体
 ```
 
-**user-service 目录结构：**
+**platform-service 目录结构：**
 ```
-forge/user/
-├── go.mod
-├── go.sum
+forge/platform/
+├── go.mod / go.sum
 ├── cmd/
-│   └── main.go              # 启动入口
+│   └── main.go
 ├── internal/
-│   ├── handler/             # HTTP 层：参数校验、请求绑定、返回响应
-│   │   └── user.go
-│   ├── logic/             # 业务逻辑层：用例编排
-│   │   └── user.go
-│   ├──           # 数据访问层：MySQL 查询
-│   │   └── user.go
-│   └── config/              # 配置映射结构体
+│   ├── handler/
+│   │   └── platformhandler.go    # HTTP handler
+│   ├── logic/
+│   │   └── platformlogic.go      # 业务逻辑
+│   ├── svc/
+│   │   └── svc.go           # ServiceContext
+│   └── config/
 │       └── config.go
-├── internal/config/
-│   └── user.yaml            # 运行时配置
 ├── Dockerfile
-└── README.md
+└── configs/
+    └── platform.yaml.example
 ```
 
 **今日产出：**
-- ✅ forge-proto 仓库初始化 + v0.1.0 tag
-- ✅ forge monorepo 创建（user/gateway/platform）
-- ✅ user.proto 注册/登录接口定义
-- ✅ `POST /api/user/register` 可调用（返回 user_id）
+- ✅ platform.proto 定义完成（服务管理 + 部署管理）
+- ✅ platform-service 框架搭建 + 编译通过
+- ✅ `POST /api/platform/services` 创建服务接口可调用
+- ✅ `GET /api/platform/services` 服务列表可查询
 
-### Day 3：MySQL + Redis + etcd 集成
+---
 
+### Day 2：MySQL 集成 + gateway 路由
+
+**MySQL + Redis 部署：**
 ```bash
-# Kind 集群部署 MySQL
-kubectl create namespace idp
+# Kind 集群部署基础设施
+kubectl create namespace forge-dev
 kubectl apply -f deploy/k8s/infra/mysql.yaml
 kubectl apply -f deploy/k8s/infra/redis.yaml
 
 # goctl 生成 Model
-goctl model mysql ddl -src user.sql -dir internal/model
+goctl model mysql ddl -src platform.sql -dir internal/model
 
-# etcd 注册中心配置（复用 Kind 自带 etcd）
-# internal/config/config.example.yaml
+# etcd 注册（复用 Kind 自带 etcd）
+# configs/platform.yaml.example
 Etcd:
   Hosts:
     - kind-control-plane:2379
-  Key: user-service.rpc
+  Key: platform.rpc
+```
+
+**gateway-service（auth-lite 模式）：**
+```bash
+cd forge/gateway
+
+# gateway 职责：
+# 1. 路由转发（/api/platform/* → platform-service）
+# 2. 简单鉴权（先硬编码 token，无需 user-service）
+# 3. traceID 注入
+# 4. 请求日志
+
+go get github.com/mirai-zen/forge-proto/gateway@v0.1.0
+```
+
+**auth-lite 实现：**
+```go
+// gateway 中间件：硬编码 admin token
+const AdminToken = "forge-admin-demo-token"
+
+func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        if token != "Bearer "+AdminToken {
+            http.Error(w, "unauthorized", 401)
+            return
+        }
+        next(w, r)
+    }
+}
 ```
 
 **今日产出：**
-- ✅ MySQL + Redis 运行
-- ✅ user-service 写入 MySQL，JWT 签发成功
-- ✅ user-service 注册到 etcd（`etcdctl get --prefix user-service` 可见）
+- ✅ MySQL + Redis 在 Kind 集群中运行
+- ✅ platform-service 读写 MySQL（服务 CRUD 数据持久化）
+- ✅ gateway 路由转发 `GET /api/platform/services` 可调通
+- ✅ 硬编码鉴权可用（等后续替换为正式 JWT）
 
-### Day 4：ArgoCD + Helm Chart + CI
+---
 
+### Day 3：ArgoCD + Helm + CI 流水线（GitOps）
+
+**部署 ArgoCD：**
 ```bash
-# 部署 ArgoCD
 kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# 编写 Helm Chart
-mkdir -p deploy/charts/user-logic/templates
+# 获取初始密码
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
+
+# 端口转发（演示用）
+kubectl port-forward svc/argocd-server -n argocd 8080:443 &
+```
+
+**编写 Helm Chart：**
+```bash
+mkdir -p deploy/charts/platform/templates
 # templates/: deployment.yaml, service.yaml, configmap.yaml
 # values.yaml / values-dev.yaml
 
 # ArgoCD Application
-# deploy/argocd/user-service.yaml
+# deploy/argocd/platform.yaml → 监听 GitHub 仓库 deploy/charts/platform/
 ```
 
-**GitHub Actions CI（每服务独立 Workflow）：**
+**GitHub Actions CI（platform 服务）：**
+```yaml
+# .github/workflows/platform-ci.yml
+name: Platform CI
+on:
+  push:
+    paths:
+      - 'platform/**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25' }
+      - run: cd platform && go vet ./... && go test ./... && go build ./...
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./platform
+          push: true
+          tags: ghcr.io/mirai-zen/forge-platform:${{ github.sha }}
 ```
-.github/workflows/user-ci.yml      # 监听 user/** 变更
-├── build:  go vet → go test → go build
-└── docker: docker build → push ghcr.io/mirai-zen/forge-user
-```
-> 详见 `forge-architecture.md` CI/CD 设计章节
 
 **今日产出：**
 - ✅ ArgoCD Web UI 可访问
-- ✅ 手动 `helm install user-service` 成功
-- ✅ `git push main` → GitHub Actions → 镜像 push 到 GHCR → ArgoCD 自动同步 → Pod Running
-
-### Day 5：gateway-service + 跨服务调用
-
-```bash
-cd forge/gateway
-
-# 引入 proto
-go get github.com/mirai-zen/forge-proto@v0.1.0
-```
-
-**gateway 职责：**
-1. JWT 鉴权（从 Header 提取 token → 调 user-service 验证）
-2. 限流（go-zero 内置）
-3. gRPC ↔ HTTP 转换
-4. traceID 注入（从请求头提取 → 写入 context）
-
-**今日产出：**
-- ✅ `POST /api/user/login` → gateway → user-service → 返回 JWT
-- ✅ `GET /api/services` → gateway 鉴权 → platform-service（下一步）
+- ✅ `helm install platform deploy/charts/platform` 部署成功
+- ✅ Git Push → GitHub Actions → 镜像 push GHCR → ArgoCD 自动同步 → Pod Running
+- ✅ GitOps 核心链路打通
 
 ---
 
-## Week 2：完整微服务 + 前端
+### Day 4：可观测性三合一（Grafana + Jaeger + Loki）
 
-### Day 6-7：platform-service
-
+**一键部署可观测性栈：**
 ```bash
-cd forge/platform
-go get github.com/mirai-zen/forge-proto@v0.1.0
+# Prometheus + Grafana
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring --create-namespace
+
+# Jaeger（链路追踪）
+helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+helm install jaeger jaegertracing/jaeger -n monitoring
+
+# Loki Stack（日志）
+helm repo add grafana https://grafana.github.io/helm-charts
+helm install loki grafana/loki-stack -n monitoring \
+  --set fluent-bit.enabled=true
 ```
 
-**platform-service 聚合三个模块：**
+**验证三步联动：**
+```bash
+# 1. 发请求 → 拿到 traceID
+curl -H "Authorization: Bearer forge-admin-demo-token" \
+     http://localhost/api/platform/services
+
+# 2. Grafana → Explore → Loki → 搜 traceID → 看到日志
+# 3. 点击日志中的 traceID → 跳转 Jaeger 瀑布图
 ```
-internal/
-├── logic/
-│   ├── logic/     # 服务 CRUD
-│   ├── deploy/      # K8s 部署对接（kubectl apply）
-│   └── template/    # 模板管理（存 MySQL TEXT 字段）
+
+**Grafana Dashboard（3 个核心面板）：**
+1. 服务概览：QPS / 延迟 / 错误率 / CPU / 内存
+2. Jaeger 瀑布图嵌入：网关 → platform 调用链
+3. 部署历史：最近 N 次部署状态
+
+**今日产出：**
+- ✅ Grafana `http://localhost:3000` 可访问
+- ✅ Jaeger `http://localhost:16686` 瀑布图可见
+- ✅ Loki 日志可 LogQL 查询
+- ✅ 日志中 traceID 蓝色链接 → 点击跳转 Jaeger
+- ✅ 三合一联动：Metrics + Trace + Logs 一体化
+
+---
+
+### Day 5：Vue 前端 MVP（控制面板）
+
+**脚手架搭建：**
+```bash
+git clone https://github.com/pure-admin/vue-pure-admin forge-web
+cd forge-web && npm install
+
+# Ant Design Vue 组件库已内置
+# 硬编码 token 到 axios interceptor
+```
+
+**三个核心页面：**
+
+| 页面 | 路由 | 功能 |
+|------|------|------|
+| **Dashboard** | `/` | 概览卡片：服务数、部署数、健康率 |
+| **服务管理** | `/services` | 服务列表 + 搜索 + 新增/删除 + 一键部署 |
+| **部署历史** | `/deployments` | 最近部署记录 + 状态标签 |
+
+**axios interceptor（auth-lite）：**
+```typescript
+// src/api/config.ts
+const TOKEN = 'forge-admin-demo-token'
+api.interceptors.request.use(config => {
+  config.headers.Authorization = `Bearer ${TOKEN}`
+  return config
+})
 ```
 
 **今日产出：**
-- ✅ `POST /api/services` 创建服务
-- ✅ `GET /api/services` 服务列表
-- ✅ `POST /api/services/:id/deploy` 触发部署
-- ✅ 3 个服务调用链完整：`gateway → user → platform`
+- ✅ 前端跑起来，3 个页面可导航
+- ✅ 服务管理页：展示 platform-service 返回的服务列表
+- ✅ 一键部署按钮：前端 → gateway → platform → ArgoCD
+- ✅ 完整演示链路：登录（跳过）→ 服务列表 → 一键部署 → 流水线可视化
 
-### Day 8：Jenkins 集成
+---
 
-等等，不用 Jenkins——用 **GitHub Actions 触发 Kind 集群内的部署**。
+## Week 2：前端打磨 + user-service 补位
 
-### Day 8：前端脚手架 + 登录页
+### Day 6-7：前端增强 + etcd 可视化
 
-```bash
-# 用 vue-pure-admin 或 Ant Design Vue Pro 模板
-git clone https://github.com/pure-admin/vue-pure-admin
-cd vue-pure-admin
-npm install
-
-# 改写登录页
-# src/views/login/index.vue → 调 POST /api/user/login
-# 存 JWT 到 localStorage → axios interceptor 全局携带
-```
-
-**今日产出：**
-- ✅ 前端跑起来
-- ✅ 登录页可输入用户名密码
-- ✅ 登录成功 → 跳转 Dashboard
-
-### Day 9：服务列表 + 注册中心控制面板
-
-**服务列表页：**
-```vue
-<!-- src/views/logic/index.vue -->
-<template>
-  <a-table :dataSource="services" :columns="columns" />
-  <a-button @click="deploy(row)">一键部署</a-button>
-</template>
-```
-
-**注册中心控制面板（etcd 可视化）：**
+**注册中心控制面板：**
 ```vue
 <!-- src/views/registry/index.vue -->
 <template>
-  <a-tree :tree-data="serviceTree" />  <!-- etcd 服务树 -->
-  <a-tag v-for="svc in services" 
+  <a-tree :tree-data="serviceTree" />
+  <a-tag v-for="svc in services"
          :color="svc.healthy ? 'green' : 'red'">
     {{ svc.name }} - {{ svc.status }}
   </a-tag>
-</template>
-<script setup>
-// WebSocket 连接后端 → 后端 etcd Watch → 推送到前端
-const ws = new WebSocket('ws://gateway-logic/ws/registry')
-ws.onmessage = (e) => { /* 解析 JSON，更新服务树 */ }
-</script>
-```
-
-**今日产出：**
-- ✅ 服务列表可展示、可搜索
-- ✅ 注册中心面板：etcd 服务树 + 健康状态实时刷新
-
-### Day 10：部署页面 + 一键部署
-
-**部署页面：**
-```vue
-<!-- src/views/deploy/index.vue -->
-<template>
-  <a-form> <!-- 选择服务、版本号 → 点部署 --> </a-form>
-  <a-modal> <!-- loading 弹窗：正在部署... → 部署成功！ --> </a-modal>
-  <a-timeline> <!-- 最近 10 次部署记录 --> </a-timeline>
 </template>
 ```
 
 **部署流水线可视化：**
 ```vue
-<template>
-  <!-- 调用 ArgoCD API：GET /api/applications/:name -->
-  <!-- 展示 sync status、last deployed、health -->
-  <a-steps>
-    <a-step status="finish" title="构建" />
-    <a-step status="finish" title="推送" />
-    <a-step status="process" title="部署中" />  <!-- ArgoCD Sync 状态 -->
-    <a-step status="wait" title="运行中" />
-  </a-steps>
-  <a-button @click="rollback">回滚</a-button>
-</template>
+<!-- src/views/deploy/index.vue -->
+<a-steps>
+  <a-step status="finish" title="构建" />
+  <a-step status="finish" title="推送" />
+  <a-step status="process" title="部署中" />
+  <a-step status="wait" title="运行中" />
+</a-steps>
 ```
 
 **今日产出：**
-- ✅ 一键部署按钮 → 前端调 API → ArgoCD Sync → Pod 跑起来
-- ✅ 部署流水线可视化：能看到当前部署在哪一步
-- ✅ 回滚按钮可用
+- ✅ etcd 服务树实时刷新（WebSocket）
+- ✅ 部署流水线步骤可视化
+- ✅ 部署回滚按钮
+
+### Day 8：user-service 补位（替换 auth-lite）
+
+```bash
+cd forge-proto
+# 编写 user/user.proto（注册/登录）
+buf generate
+git tag user/v0.1.0 && git push --tags
+
+cd forge/user
+go get github.com/mirai-zen/forge-proto/user@v0.1.0
+```
+
+**user-service 实现：**
+- 注册（username + password + email → MySQL）
+- 登录（返回 JWT token）
+- gateway 中间件替换为真实 JWT 校验
+
+**今日产出：**
+- ✅ `POST /api/user/register` 用户注册
+- ✅ `POST /api/user/login` 返回 JWT
+- ✅ gateway 从 auth-lite 切换到真实 JWT 鉴权
+- ✅ 完整 3 服务链路：`gateway → user → platform`
+
+### Day 9-10：前端登录页 + 打磨
+
+**登录页：**
+```vue
+<!-- src/views/login/index.vue -->
+<a-form>
+  <a-input v-model:value="username" />
+  <a-input-password v-model:value="password" />
+  <a-button @click="login">登录</a-button>
+</a-form>
+<!-- 调 POST /api/user/login → 存 JWT → 跳转 Dashboard -->
+```
+
+**打磨清单：**
+- 登录页接入真实 user-service
+- Dashboard 数据接入 Grafana 截图
+- 部署页对接 ArgoCD API 状态查询
+- 全局 loading / error 处理
 
 ---
 
@@ -647,13 +789,17 @@ curl -sfL https://get.k3s.io | sh -
 ## 工时总计
 
 ```
-Day 1-5    ████████████  proto + user-service 端到端
-Day 6-10   ████████████  platform + 前端三位一体
-Day 11-14  ████████████  可观测性三合一
+Day 1-2    ████████████  platform-service + MySQL + gateway 路由
+Day 3      ██████        ArgoCD + Helm + GitOps CI 流水线
+Day 4      ██████        可观测性三合一（Grafana + Jaeger + Loki）
+Day 5      ██████        Vue 前端 MVP（服务管理 + 一键部署）
+Day 6-7    ████████████  前端增强（etcd 可视化 + 流水线可视化）
+Day 8      ██████        user-service 补位（替换 auth-lite）
+Day 9-10   ████████████  前端登录页 + 打磨
+Day 11-14  ████████████  可观测性全套（对标原 Week 3）
 Day 15-20  ████████████  打磨 + 投简历
 ────────────────────────────────────────
-总工时：~100 小时（周末两天 × 10 小时 × 5 周 + 工作日晚 2 小时 × 20 天）
-如果你全职做：2 周。如果你周末做：5 周。
+核心亮点：Day 3 即可演示 GitOps 完整链路，Day 5 即可演示全栈 IDP
 ```
 
 ---
@@ -663,17 +809,15 @@ Day 15-20  ████████████  打磨 + 投简历
 每天关机前确认：
 
 ```bash
-# ✅ user-service 可注册/登录
-# ✅ gateway 可鉴权
-# ✅ platform 可调通
-# ✅ ArgoCD 可见
-# ✅ Grafana 可访问
-# ✅ Jaeger 瀑布图
-# ✅ Loki 日志可查
-# ✅ 前端可演示
+# ✅ platform-service CRUD 可用
+# ✅ gateway 路由转发正常
+# ✅ ArgoCD 可见 + Git Push 自动同步
+# ✅ Grafana / Jaeger / Loki 可访问
+# ✅ 前端可演示完整链路
+# ✅ user-service JWT 鉴权正常（Day 8 起）
 ```
 
 ---
 
-*文档版本：v1.0*
-*日期：2026-06-14*
+*文档版本：v2.0*
+*日期：2026-06-15*

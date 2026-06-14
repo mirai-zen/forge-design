@@ -11,14 +11,13 @@
 | 项目 | 规格 | 用途 |
 |------|------|------|
 | 主机 | MacBook M4 Pro | 主要开发机 |
-| OS | macOS Sonoma/Sequoia | 开发环境 |
+| OS | macOS 26.3 | 开发环境 |
 | 网络 | 家庭/公司网络 | 日常开发 |
 
-**待确认：**
-- [ ] macOS 具体版本（Sonoma 14.x / Sequoia 15.x）
-- [ ] 内存大小（18GB / 36GB / 36GB+）
-- [ ] 磁盘剩余空间
-- [ ] 是否已安装 Homebrew
+**已确认：**
+- [x] macOS 26.3
+- [x] 内存 48GB，磁盘 1TB
+- [x] Homebrew 已安装
 
 ### 0.2 测试机（铭凡 UM890 Pro）
 
@@ -28,14 +27,14 @@
 | CPU | 8 核 16 线程 | 运行 Kind 集群 |
 | 内存 | 64 GB | 承载全套组件 |
 | 磁盘 | 1 TB SSD | 存储 |
-| OS | Windows 11 + WSL2 (Ubuntu) | 开发环境 |
+| OS | Windows 11 + WSL2 (AlmaLinux) | 开发环境 |
 | K8s | Kind 集群（1 Control + 2 Worker） | 本地 K8s |
 
-**待确认：**
-- [ ] WSL2 Ubuntu 版本（22.04 / 24.04）
-- [ ] Docker Desktop 版本
-- [ ] 两台机器是否在同一个局域网
-- [ ] 铭凡机器的公网 IP（固定/动态）
+**已确认：**
+- [x] WSL2 AlmaLinux（使用 dnf 包管理）
+- [x] Docker Desktop + Kind 已部署 3 节点集群
+- [x] 两台机器在同一局域网
+- [x] Tailscale 已配置，网络互通无需额外处理
 
 ### 0.3 网络拓扑
 
@@ -90,10 +89,10 @@ brew install nvm              # Node 版本管理
 brew install goenv            # Go 版本管理
 ```
 
-**待确认：**
-- [ ] Docker Desktop vs Colima（Colima 更轻量，免费）
-- [ ] Go 版本锁定（1.22 / 1.23）
-- [ ] Node.js 版本锁定（20 LTS / 22）
+**已确认：**
+- [x] Docker Desktop（已在使用）
+- [x] Go 1.25
+- [x] Node.js 24.15.0
 
 #### 1.1.2 IDE 配置
 
@@ -109,9 +108,9 @@ brew install goenv            # Go 版本管理
 # YAML / JSON / Dockerfile - 格式支持
 ```
 
-**待确认：**
-- [ ] VS Code 还是 GoLand（GoLand 收费，VS Code 免费）
-- [ ] 是否需要安装 Vue 语言服务器（`vue-language-server`）
+**已确认：**
+- [x] 前端 VS Code，后端 GoLand
+- [x] Vue 语言服务器不装
 
 #### 1.1.3 SSH 配置
 
@@ -128,10 +127,10 @@ Host mingfan-test
     IdentityFile ~/.ssh/id_ed25519
 ```
 
-**待确认：**
-- [ ] SSH 密钥类型（ed25519 / rsa）
-- [ ] GitHub Token 还是 SSH Key 推送代码
-- [ ] 铭凡机器的 IP 地址（局域网 IP / 公网 IP）
+**已确认：**
+- [x] SSH 密钥已配置
+- [x] 推送代码使用 SSH Key
+- [x] Tailscale 已配置，IP 通过 Tailscale 网络通信
 
 ### 1.2 铭凡 UM890 Pro 环境
 
@@ -168,10 +167,10 @@ swap=0
 localhostForwarding=true
 ```
 
-**待确认：**
-- [ ] WSL2 Ubuntu 版本
-- [ ] Docker Desktop for Windows 还是 WSL2 内置 Docker
-- [ ] 是否需要安装 Go/Node 在 WSL2 中
+**已确认：**
+- [x] WSL2 AlmaLinux（使用 dnf）
+- [x] Docker Desktop for Windows
+- [x] WSL2 中已安装 Go/Node
 
 ### 1.3 双机协作流程
 
@@ -417,9 +416,9 @@ export GH_TOKEN=ghp_xxxxxxxxxxxx
 gh auth login
 ```
 
-**待确认：**
-- [ ] 使用 Personal Access Token 还是 SSH Key
-- [ ] Token 权限范围（最小权限原则）
+**已确认：**
+- [x] 使用 SSH Key 推送代码
+- [x] 无需 Token，最小权限已满足
 
 ### 3.2 Docker Buildx 多架构构建
 
@@ -436,9 +435,9 @@ docker buildx build \
   ./backend/user-logic/
 ```
 
-**待确认：**
-- [ ] Phase 0 是否需要多架构构建（建议先 amd64 即可）
-- [ ] 是否启用 BuildKit（`DOCKER_BUILDKIT=1`）
+**已确认：**
+- [x] Phase 0 仅 amd64，不搞多架构
+- [x] BuildKit 启用 `DOCKER_BUILDKIT=1`
 
 ### 3.3 ArgoCD 初始配置
 
@@ -458,9 +457,9 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443 &
 # 密码：上面获取的
 ```
 
-**待确认：**
-- [ ] ArgoCD 是否需要配置认证（默认无密码，生产必须改）
-- [ ] 是否启用 ArgoCD UI（面试演示需要）
+**已确认：**
+- [x] Phase 0 跳过认证配置，生产再改
+- [x] 启用 ArgoCD UI（面试演示需要）
 
 ### 3.4 GitHub Actions Runner
 
@@ -566,9 +565,9 @@ spec:
               number: 8880
 ```
 
-**待确认：**
-- [ ] 本地开发是否需要 Ingress（可以直接 port-forward）
-- [ ] 是否需要配置 `/etc/hosts`（`127.0.0.1 forge.local`）
+**已确认：**
+- [x] 无需 Ingress，port-forward 足够
+- [x] 无需配置 /etc/hosts
 
 ---
 
@@ -790,10 +789,10 @@ func TestUserService_Register(t *testing.T) {
 }
 ```
 
-**待确认：**
-- [ ] 是否需要写单元测试（面试不看，但代码质量需要）
-- [ ] 是否需要 E2E 测试（Playwright，Phase 1 再考虑）
-- [ ] Mock 策略（K8s Client 如何 mock）
+**已确认：**
+- [x] Phase 0 写核心逻辑的单元测试
+- [x] E2E 测试推迟到 Phase 1
+- [x] Mock 策略：用 testcontainers-go 集成测试代替 mock
 
 ---
 
@@ -960,22 +959,22 @@ MVP 核心链路（必须完成）：
 
 ## 10. 下一步行动
 
-### Day 0：环境准备（今天）
+### Day 0：环境准备 ✅ 完成
 
-- [ ] 确认 MacBook M4 Pro 具体配置
-- [ ] 确认铭凡机器配置和网络
-- [ ] 安装 Homebrew + 基础工具
-- [ ] 配置 SSH 密钥
-- [ ] 创建 GitHub 仓库（forge + forge-proto）
-- [ ] 初始化项目结构
+- [x] 确认 MacBook M4 Pro 具体配置
+- [x] 确认铭凡机器配置和网络
+- [x] 安装 Homebrew + 基础工具
+- [x] 配置 SSH 密钥
+- [x] 创建 GitHub 仓库（forge + forge-proto）
+- [x] 初始化项目结构并推送
 
-### Day 1：协议仓库 + user-service
+### Day 1：platform.proto + platform-service
 
-- [ ] 创建 forge-proto 仓库
-- [ ] 编写 user.proto
-- [ ] 生成 Go/TS 代码
-- [ ] 创建 user-service
-- [ ] 编写 MySQL 初始化脚本
+- [ ] 编写 platform.proto（服务管理 + 部署管理接口）
+- [ ] buf generate 生成 Go/TS 代码 + tag v0.1.0
+- [ ] 搭建 platform-service go-zero 骨架
+- [ ] 编写 MySQL 初始化脚本（services / deployments 表）
+- [ ] `POST /api/platform/services` 可调用
 
 ### Day 2-5：继续 Week 1 计划
 
@@ -985,4 +984,4 @@ MVP 核心链路（必须完成）：
 
 *文档版本：v1.0*
 *创建日期：2026-06-14*
-*最后更新：2026-06-14*
+*最后更新：2026-06-15*
