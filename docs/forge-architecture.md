@@ -77,15 +77,15 @@ Phase 0（3 个仓库）：
 │   ├── user/              # user-service proto（独立 go.mod）
 │   │   ├── go.mod            # module github.com/mirai-zen/forge-proto/user
 │   │   ├── user.proto
-│   │   └── gen/              # buf generate 输出（go/ts/openapi）
+│   │   └── user.pb.go        # buf generate 输出
 │   ├── gateway/           # gateway-service proto（独立 go.mod）
 │   │   ├── go.mod            # module github.com/mirai-zen/forge-proto/gateway
 │   │   ├── gateway.proto
-│   │   └── gen/
+│   │   └── gateway.pb.go
 │   ├── platform/          # platform-service proto（独立 go.mod）
 │   │   ├── go.mod            # module github.com/mirai-zen/forge-proto/platform
 │   │   ├── platform.proto
-│   │   └── gen/
+│   │   └── platform.pb.go
 │   ├── buf.gen.yaml          # buf 代码生成配置
 │   ├── go.work               # Go workspace
 │   └── .github/workflows/    # 各 proto 独立 CI

@@ -9,6 +9,7 @@
 ```
 docs/
 ├── README.md                     ← 本文档：索引 + 规范
+├── conventions.md                # 开发规范：命名、结构、工具、环境
 ├── forge-architecture.md         # 总架构方案：微服务拆分、技术选型、命名体系
 ├── sprint-plan.md                # 开发计划：W1-W4 排期 + 功能概览
 ├── dev-environment.md            # 环境配置：Mac + 铭凡双机开发指南
@@ -91,6 +92,7 @@ docs/
 
 | 我要… | 看这个 |
 |--------|--------|
+| 了解开发规范 | [`conventions.md`](conventions.md) |
 | 了解整体架构 | [`forge-architecture.md`](forge-architecture.md) |
 | 知道先做什么 | [`sprint-plan.md`](sprint-plan.md) |
 | 配环境 | [`dev-environment.md`](dev-environment.md) |

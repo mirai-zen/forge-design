@@ -61,6 +61,19 @@ MacBook M4 Pro（开发机）
 
 ---
 
+## 1.5 仓库本地路径
+
+| 仓库 | 本地路径 | 说明 |
+|------|---------|------|
+| **forge-proto** | `/Users/mirai/Code/go/forge-proto/` | 协议仓库（proto + buf + 生成代码） |
+| **forge** | `/Users/mirai/Code/go/forge/` | 后端 Monorepo（platform/gateway/user） |
+| **forge-web** | `/Users/mirai/Code/web/forge-web/` | 前端（Vue3 + Ant Design） |
+| **forge-design** | `/Users/mirai/CodeBuddy/forge-design/` | 设计文档仓库 |
+
+> ⚠️ `forge-design` 是纯文档仓库，不要往里放代码。proto 放 `forge-proto`，Go 代码放 `forge`，前端放 `forge-web`。
+
+---
+
 ## 2. Tailscale 配置
 
 ### 2.1 安装 Tailscale

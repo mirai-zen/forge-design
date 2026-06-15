@@ -968,13 +968,26 @@ MVP 核心链路（必须完成）：
 - [x] 创建 GitHub 仓库（forge + forge-proto）
 - [x] 初始化项目结构并推送
 
-### Day 1：platform.proto + platform-service
+### Day 1：platform.proto + platform-service ✅ 完成
 
-- [ ] 编写 platform.proto（服务管理 + 部署管理接口）
-- [ ] buf generate 生成 Go/TS 代码 + tag v0.1.0
-- [ ] 搭建 platform-service go-zero 骨架
-- [ ] 编写 MySQL 初始化脚本（services / deployments 表）
-- [ ] `POST /api/platform/services` 可调用
+- [x] 编写 platform.proto（8 个 RPC：项目管理 + 服务管理 + 部署管理）
+- [x] buf generate 生成 Go 代码 + tag platform/v0.1.0
+- [x] 搭建 platform-service go-zero 骨架（cmd + handler + logic + svc + config + model）
+- [x] 移除 gen/ 目录，pb 文件直接放服务目录
+- [x] MySQL 建库 forge_platform + 3 表（projects / services / service_envs）
+- [x] CreateProject：GitHub API 创建仓库 + 写库
+- [x] ListProjects：分页 + 关键词搜索 + JOIN 服务数统计
+- [x] GetProject：含服务列表
+- [x] CreateService：写库 + 3 环境初始化 + GitHub API 提交 PR
+- [x] GetService：DB 查询 + 环境列表
+- [x] DeployService：GitHub Actions workflow_dispatch
+- [x] GetEnvStatus：查 namespace（实时状态待 ArgoCD 接入）
+- [x] ListTemplates：硬编码返回模板列表
+- [x] 编译通过，go build ./... 无错误
+
+### Day 2：gateway 路由 + MySQL 集成
+
+- [ ] [待定]
 
 ### Day 2-5：继续 Week 1 计划
 
