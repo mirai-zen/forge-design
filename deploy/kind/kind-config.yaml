@@ -1,0 +1,58 @@
+# Forge IDP — Kind 开发集群配置
+# 用途：铭凡机器上的本地 K8s 开发环境
+# 集群名：forge
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: forge
+
+# 网络配置
+networking:
+  # API Server 监听所有网卡，Tailscale 下任意机器可远程 kubectl 操作
+  apiServerAddress: "0.0.0.0"
+  # 固定 API Server 端口，Mac 端 kubeconfig 永久有效，集群重建不换端口
+  apiServerPort: 6443
+  # IPVS 负载均衡，Service 数量增多时性能优于默认 iptables
+  kubeProxyMode: ipvs
+
+# 节点配置：1 控制面 + 2 工作节点
+nodes:
+  # 控制面节点
+  - role: control-plane
+    # API Server 证书加入 Tailscale IP，Mac 端 TLS 验证通过
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          certSANs:
+            - "100.117.83.21"
+            - "127.0.0.1"
+            - "mirai-wsl.tail6ddf30.ts.net"
+    # Docker 端口映射：宿主机直接暴露，外部无需 kubectl port-forward
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+    # 持久化目录：集群重建时数据保留
+    extraMounts:
+      # 控制面 etcd 数据独立挂载，防止集群状态丢失
+      - hostPath: /data/forge-kind/etcd
+        containerPath: /var/lib/etcd
+      # 通用数据目录，PV/PVC 通过 StorageClass 自动分配子路径
+      - hostPath: /data/forge-kind/control-plane
+        containerPath: /data
+
+  # 工作节点 1
+  - role: worker
+    extraMounts:
+      - hostPath: /data/forge-kind/worker-1
+        containerPath: /data
+
+  # 工作节点 2
+  - role: worker
+    extraMounts:
+      - hostPath: /data/forge-kind/worker-2
+        containerPath: /data

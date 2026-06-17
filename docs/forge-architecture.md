@@ -830,7 +830,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: fluent-bit
-  namespace: logging
+  namespace: monitoring
 spec:
   template:
     spec:

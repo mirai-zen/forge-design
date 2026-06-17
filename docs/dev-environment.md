@@ -61,6 +61,26 @@ MacBook M4 Pro（开发机）
 
 ---
 
+## 1.4 K8s Namespace 规划
+
+| Namespace | 用途 | 说明 |
+|-----------|------|------|
+| `infra` | 共享基础设施 | ArgoCD / MySQL / Redis / monitoring（Grafana/Prometheus/Jaeger/Loki） |
+| `forge-dev` | 开发环境 | platform / gateway / user 等服务的 dev 部署 |
+| `forge-staging` | 测试环境 | 同上，staging 部署 |
+| `forge-prod` | 正式环境 | 同上，prod 部署 |
+
+### 为什么这样分
+
+```
+infra       → 所有工具和中间件放一起，Phase 0 不拆
+forge-*     → 业务按环境隔离，每个环境一个 namespace
+```
+
+> Phase 0 单实例 MySQL/Redis，放 `infra` 够用。Phase 1 再考虑每环境独立数据库或拆分 monitoring。
+
+---
+
 ## 1.5 仓库本地路径
 
 | 仓库 | 本地路径 | 说明 |

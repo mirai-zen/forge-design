@@ -71,7 +71,8 @@ GitHub Organization: `mirai-zen`
 | 仓库 | `forge-{name}` | forge-proto / forge / forge-web |
 | Proto 模块 | `forge-proto/{service}` | forge-proto/platform |
 | 后端模块 | `forge/{service}` | forge/platform |
-| K8s Namespace | `forge-{env}` | forge-dev / forge-staging / forge-prod |
+| K8s Namespace（业务） | `forge-{env}` | forge-dev / forge-staging / forge-prod |
+| K8s Namespace（工具） | `infra` | ArgoCD + MySQL + monitoring |
 | K8s Service | `forge-{service}` | forge-platform |
 | Docker Image | `ghcr.io/mirai-zen/forge-{service}` | ghcr.io/mirai-zen/forge-platform |
 | etcd Key | `{service}.rpc` | platform.rpc |
